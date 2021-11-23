@@ -28,8 +28,6 @@ def send_public_message(message):
 
 
 next_game_id = 0
-with open("words.csv", "r") as word_list_file:
-    word_list = list(reader(word_list_file))
 
 
 # 表示玩家是否已经加入了一场没有结束的游戏？
@@ -57,6 +55,8 @@ def handle_create_game(init_user: RocketUserInfo, game_name: str):
             # 玩家没有加入任何游戏，准备创建一个新游戏。
             # 创建游戏之前，需要创建一个新的私有群。
             group_id = rocket_client.create_room(game_name, init_user['username'])
+            with open("words.csv", "r") as word_list_file: # 每次创建新游戏的时候，都更新一下word_list。
+                word_list = list(reader(word_list_file))
             current_game = Game(Player(init_user, rocket_client.get_room(init_user['username']))
                                 , word_list, next_game_id, GameControl(rocket_client, group_id))
             next_game_id += 1
