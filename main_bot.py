@@ -5,6 +5,8 @@ from settings import config
 from re import match
 from csv import reader
 from threading import Thread
+from json import JSONDecodeError
+from logging import info, error, exception
 
 recruit_str = r"/创建游戏 (.*)"
 apply_str = r"/加入游戏 (.*)"
@@ -55,12 +57,16 @@ def handle_create_game(init_user: RocketUserInfo, game_name: str):
             # 玩家没有加入任何游戏，准备创建一个新游戏。
             # 创建游戏之前，需要创建一个新的私有群。
             group_id = rocket_client.create_room(game_name, init_user['username'])
-            with open("words.csv", "r") as word_list_file: # 每次创建新游戏的时候，都更新一下word_list。
-                word_list = list(reader(word_list_file))
-            current_game = Game(Player(init_user, rocket_client.get_room(init_user['username']))
-                                , word_list, next_game_id, GameControl(rocket_client, group_id))
-            next_game_id += 1
-            games[game_name] = current_game
+            if not group_id:
+                send_public_message("创建游戏失败。")
+                return
+            else:
+                with open("words.csv", "r", encoding='utf8') as word_list_file:  # 每次创建新游戏的时候，都更新一下word_list。
+                    word_list = list(reader(word_list_file))
+                current_game = Game(Player(init_user, rocket_client.get_room(init_user['username']))
+                                    , word_list, next_game_id, GameControl(rocket_client, group_id))
+                next_game_id += 1
+                games[game_name] = current_game
     else:
         send_public_message("游戏名只能包含中英文和数字。")
 
@@ -106,7 +112,7 @@ def handle_game_start(user: RocketUserInfo, game_name: str):
                         # 游戏结束之后，不立即解散房间，需要房主手动取消房间。
                         # rocket_client.dismiss_group(games[game_name].control.group_id)
                         # games.pop(game_name)
-                        send_public_message(f"游戏{game_name}已结束。")
+                        send_public_message(f"游戏“{game_name}”已结束。")
 
                     Thread(target=start_game).start()
                 else:
@@ -142,7 +148,10 @@ def handle_quite_game(user: RocketUserInfo):
 while True:
     main_group_message = None
     while not main_group_message:
-        main_group_message = rocket_client.get_next_message(config['channel_id'])
+        try:
+            main_group_message = rocket_client.get_next_message(config['channel_id'])
+        except JSONDecodeError as e:
+            exception(e)
     if main_group_message[1].startswith("/"):
         # 可能是命令，谨慎对待！
         rec = match(recruit_str, main_group_message[1])
@@ -156,7 +165,7 @@ while True:
         if can:  # 玩家试图取消游戏
             handle_delete_game(user_info, can.group(1))
         fir = match(fire_str, main_group_message[1])
-        if fir: # 玩家要开始游戏！
+        if fir:  # 玩家要开始游戏！
             handle_game_start(user_info, fir.group(1))
         lst = match(list_str, main_group_message[1])
         if lst:

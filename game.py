@@ -34,22 +34,31 @@ class Game:
         return chosen_spies, (chosen_word[0], chosen_word[1])
 
     def get_winner(self) -> Union[Identity, None]:
-        # 找到胜利者。
+        # 找到胜利者。当参与人数超过四人时，规则：
         # 平民获胜条件：场上不存在卧底。
         # 卧底获胜条件：场上卧底数不少于(平民数-1)。2平民1卧底时，卧底已经获胜。
-        innocent_count = len(
-            list(player for player in self.player_list if player.game_player_info.identity == Identity.innocent))
+        # 当参与人数等于三人时，规则：
+        # 投出平民：卧底获胜；投出卧底：平民获胜。
+        innocent_count = len(list(player for player in self.player_list if player.game_player_info.identity == Identity.innocent))
         spy_count = len(list(player for player in self.player_list if player.game_player_info.identity == Identity.spy))
         if spy_count == 0:
             return Identity.innocent  # 没有卧底，平民胜利。
-        elif spy_count >= innocent_count - 1:
-            return Identity.spy
         else:
-            return None
+            if len(self.player_list) == 3:  # 游戏仅有三人参与。
+                if spy_count == 1 and innocent_count == 1:
+                    return Identity.spy
+                else:
+                    return None
+            else:
+                if spy_count >= innocent_count - 1:
+                    return Identity.spy
+                else:
+                    return None
 
     @staticmethod
-    def print_players_list(players_list: List[Player]) -> str:
-        return '、'.join(p.__str__() for p in players_list)
+    def print_players_list(players_list: List[Player], inline: bool = True) -> str:
+        delimiter = '、' if inline else '\n'
+        return delimiter.join(p.__str__() for p in players_list)
 
     def start(self):
         self.status = GameStatus.started
@@ -61,7 +70,9 @@ class Game:
         # 给对应的用户分发身份。
         for player in self.player_list:
             self.control.send_private_message(player, f"你的词是：{player.game_player_info.keyword}，你的id：{player.id}")
-        self.control.send_public_message(f"身份分发完毕。共有{len(spies_players)}个卧底、{len(self.player_list) - len(spies_players)}，游戏开始。")
+        self.control.send_public_message(f"玩家列表：\n{Game.print_players_list(self.player_list, False)}\n请大家牢记自己的编号。")
+        self.control.send_public_message(f"身份分发完毕。共有{len(spies_players)}个卧底、{len(self.player_list) - len(spies_players)}个平民。")
+        self.control.send_public_message(f"平民游戏目标：投出所有卧底；卧底游戏目标：尽可能不被投出。现在游戏开始。")
         while self.get_winner() is None:  # 一轮游戏。
             self.game_round += 1
             self.control.send_public_message(f"第{self.game_round}轮")
@@ -78,7 +89,6 @@ class Game:
                 # 投票总是全体玩家参与，投票顺序在未决出被投出玩家时不会改变
                 for voting_player in reversed(self.player_list):
                     self.control.send_public_message(f"请{voting_player}投票。请发送一条消息内容只有要票选的玩家的id，输入0弃权。")
-                    # TODO: 修bug
                     while True:
                         vote_str = self.control.wait_for_player(voting_player)
                         if vote_str == "0":
@@ -102,7 +112,7 @@ class Game:
                 players_need_speak = list(filter(lambda player: player.game_player_info.vote_count == max_vote_count,
                                                  self.player_list))  # 找出票数最高的玩家们。
                 if len(players_need_speak) > 1:
-                    self.control.send_public_message(f"玩家{self.print_players_list(players_need_speak)}平票。")
+                    self.control.send_public_message(f"玩家{Game.print_players_list(players_need_speak)}平票。")
                 # 还原玩家投票数
                 for player in self.player_list:
                     player.game_player_info.vote_count = 0

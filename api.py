@@ -62,10 +62,14 @@ class RocketClient:
             self.user_rooms[user_name] = self.client.im_create(user_name).json()['room']['rid']
         return self.user_rooms[user_name]
 
-    # 创建一个群组，返回群组的id
-    def create_room(self, group_name, init_user_name: Union[None, str] = None) -> str:
+    # 创建一个群组，返回群组的id，有可能创建失败。
+    def create_room(self, group_name, init_user_name: Union[None, str] = None) -> Union[str, None]:
         members = [init_user_name] if init_user_name else None
-        return self.client.groups_create(group_name, members=members).json()['group']['_id']
+        create_result = self.client.groups_create(group_name, members=members).json()
+        if 'group' in create_result:
+            return create_result['group']['_id']
+        else:
+            return None
 
     # 向一个群组添加用户。
     def add_user_to_room(self, group_id, user_id):
